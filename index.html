@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skin Lesion Classifier · BE Project</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg:       #080c10;
+      --surface:  #0e1318;
+      --border:   rgba(255,255,255,0.07);
+      --text:     #dde6ef;
+      --muted:    #6b7a8d;
+      --accent:   #00d4ff;
+      --accent2:  #7b61ff;
+      --risk-low:      #22c55e;
+      --risk-moderate: #f59e0b;
+      --risk-high:     #f97316;
+      --risk-critical: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background grid ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app { position: relative; z-index: 1; min-height: 100vh; padding-bottom: 80px; }
+
+    /* ── Header ── */
+    .header {
+      padding: 48px 24px 40px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 50%; transform: translateX(-50%);
+      width: 120px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.2);
+      color: var(--accent);
+      font-family: 'Syne', sans-serif;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 2px;
+      margin-bottom: 20px;
+    }
+
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    .header h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(32px, 6vw, 52px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .header h1 .line2 {
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      font-size: 14px; color: var(--muted);
+      max-width: 380px; margin: 0 auto; line-height: 1.65;
+    }
+
+    /* ── Disease pills row ── */
+    .disease-strip {
+      display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 6px; padding: 20px 20px 0; max-width: 760px; margin: 0 auto;
+    }
+
+    .dpill {
+      font-family: 'Syne', sans-serif;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+      padding: 4px 12px; border-radius: 2px;
+      border: 1px solid rgba(123,97,255,0.25);
+      background: rgba(123,97,255,0.07);
+      color: #a395ff;
+    }
+
+    /* ── Container ── */
+    .container { max-width: 700px; margin: 0 auto; padding: 36px 20px 0; }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 1.5px dashed rgba(0,212,255,0.2);
+      border-radius: 4px;
+      padding: 56px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background: rgba(0,212,255,0.02);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upload-zone::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(0,212,255,0.06) 0%, transparent 70%);
+      opacity: 0; transition: opacity 0.3s;
+    }
+
+    .upload-zone:hover::before, .upload-zone.drag-over::before { opacity: 1; }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: rgba(0,212,255,0.5);
+      background: rgba(0,212,255,0.04);
+    }
+
+    .upload-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto 20px;
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      background: rgba(0,212,255,0.06);
+      position: relative; z-index: 1;
+    }
+
+    .upload-zone h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 17px; font-weight: 700;
+      color: var(--text); margin-bottom: 6px;
+      position: relative; z-index: 1;
+    }
+
+    .upload-zone p {
+      font-size: 13px; color: var(--muted);
+      margin-bottom: 24px; position: relative; z-index: 1;
+    }
+
+    .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 22px; border-radius: 3px;
+      font-family: 'Syne', sans-serif;
+      font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+      cursor: pointer; transition: all 0.15s ease; border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00b4d8, #0077b6);
+      color: #fff;
+      box-shadow: 0 0 20px rgba(0,180,216,0.25);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 28px rgba(0,180,216,0.4); }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.09); }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+    /* ── Preview ── */
+    .preview-card {
+      border: 1px solid var(--border);
+      border-radius: 4px; overflow: hidden;
+      background: var(--surface);
+    }
+
+    .preview-image { width: 100%; max-height: 360px; object-fit: cover; display: block; }
+
+    .preview-actions {
+      padding: 14px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--border);
+    }
+
+    .preview-actions p { font-size: 12px; color: var(--muted); }
+
+    /* ── Analyzing ── */
+    .analyzing { text-align: center; padding: 60px 24px; }
+
+    .scan-ring {
+      width: 60px; height: 60px;
+      margin: 0 auto 24px;
+      border-radius: 50%;
+      border: 2px solid rgba(0,212,255,0.1);
+      border-top-color: var(--accent);
+      border-right-color: rgba(0,212,255,0.4);
+      animation: spin 1s linear infinite;
+      position: relative;
+    }
+
+    .scan-ring::after {
+      content: '';
+      position: absolute; inset: 6px;
+      border-radius: 50%;
+      border: 1px solid rgba(123,97,255,0.2);
+      border-bottom-color: var(--accent2);
+      animation: spin 1.5s linear infinite reverse;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .analyzing h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 17px; font-weight: 700; margin-bottom: 6px;
+    }
+
+    .analyzing p { font-size: 13px; color: var(--muted); }
+
+    /* ── Result ── */
+    .result-card {
+      border: 1px solid var(--border);
+      border-radius: 4px; overflow: hidden;
+      background: var(--surface);
+      animation: fadeUp 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-top {
+      padding: 22px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, rgba(0,212,255,0.04), rgba(123,97,255,0.04));
+      display: flex; align-items: flex-start; gap: 16px;
+    }
+
+    .condition-icon {
+      width: 52px; height: 52px; min-width: 52px;
+      border-radius: 4px;
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+    }
+
+    .condition-code {
+      font-family: 'Syne', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .condition-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 20px; font-weight: 800;
+      line-height: 1.2; color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .conf-badge, .risk-badge {
+      font-family: 'Syne', sans-serif;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 2px;
+    }
+
+    .conf-high   { background: rgba(34,197,94,0.12);  color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+    .conf-medium { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); }
+    .conf-low    { background: rgba(239,68,68,0.10);  color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+
+    .risk-low      { background: rgba(34,197,94,0.10);  color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+    .risk-moderate { background: rgba(245,158,11,0.10); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+    .risk-high     { background: rgba(249,115,22,0.10); color: #fb923c; border: 1px solid rgba(249,115,22,0.2); }
+    .risk-critical { background: rgba(239,68,68,0.10);  color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+
+    .result-body { padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+
+    .desc { font-size: 14px; color: #b0bec8; line-height: 1.75; }
+
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .info-block {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 3px; padding: 14px;
+    }
+
+    .info-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px;
+    }
+
+    .info-value { font-size: 13px; color: #b0bec8; line-height: 1.5; }
+
+    .symptom-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 13px; color: #b0bec8; margin-bottom: 6px;
+    }
+
+    .sdot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--accent); flex-shrink: 0; margin-top: 5px;
+    }
+
+    .action-block {
+      background: rgba(0,212,255,0.05);
+      border: 1px solid rgba(0,212,255,0.15);
+      border-radius: 3px; padding: 14px;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+
+    .action-icon { font-size: 18px; }
+    .action-text { font-size: 13px; color: var(--accent); line-height: 1.6; }
+
+    .disclaimer {
+      background: rgba(245,158,11,0.05);
+      border: 1px solid rgba(245,158,11,0.15);
+      border-radius: 3px; padding: 12px 14px;
+      display: flex; gap: 10px;
+    }
+
+    .disclaimer p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+    .result-footer {
+      padding: 14px 22px;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      background: rgba(239,68,68,0.05);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 4px; padding: 24px; text-align: center;
+    }
+
+    .error-box p { font-size: 13px; color: #f87171; margin-bottom: 16px; }
+
+    /* ── Camera ── */
+    .camera-wrap {
+      border: 1px solid var(--border);
+      border-radius: 4px; overflow: hidden;
+    }
+
+    .camera-video {
+      width: 100%; max-height: 380px;
+      object-fit: cover; display: block;
+      transform: scaleX(-1);
+    }
+
+    .camera-bar {
+      padding: 14px 18px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+    }
+
+    input[type=file] { display: none; }
+    canvas { display: none; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <div class="badge"><div class="badge-dot"></div>BE Project · Computer Engineering</div>
+    <h1>Skin Lesion<br /><span class="line2">Classifier</span></h1>
+    <p>Upload a dermoscopy image. Gemini Vision AI classifies it across 7 disease categories.</p>
+  </header>
+
+  <div class="disease-strip">
+    <span class="dpill">akiec</span>
+    <span class="dpill">bcc</span>
+    <span class="dpill">bkl</span>
+    <span class="dpill">df</span>
+    <span class="dpill">nv</span>
+    <span class="dpill">mel</span>
+    <span class="dpill">vasc</span>
+  </div>
+
+  <div class="container">
+
+    <div id="stage-upload">
+      <div class="upload-zone" id="dropZone">
+        <div class="upload-icon">🔬</div>
+        <h3>Drop dermoscopy image here</h3>
+        <p>Upload a clear photo of the skin lesion for classification</p>
+        <div class="btn-row" onclick="event.stopPropagation()">
+          <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📁 Upload image</button>
+          <button class="btn btn-secondary" onclick="startCamera()">📷 Use camera</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFile(event)" />
+      </div>
+
+      <div style="margin-top:28px; padding:20px; border:1px solid var(--border); border-radius:4px; background:rgba(255,255,255,0.01);">
+        <p style="font-family:'Syne',sans-serif; font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:14px;">7 Classes</p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="disease-row" data-code="akiec">
+            <span class="dpill">akiec</span>
+            <span style="font-size:13px; color:#b0bec8; margin-left:10px;">Actinic Keratoses & Intraepithelial Carcinoma</span>
+          </div>
+          <div class="disease-row" data-code="bcc">
+            <span class="dpill">bcc</span>
+            <span style="font-size:13px; color:#b0bec8; margin-left:10px;">Basal Cell Carcinoma</span>
+          </div>
+          <div class="disease-row" data-code="bkl">
+            <span class="dpill">bkl</span>
+            <span style="font-size:13px; color:#b0bec8; margin-left:10px;">Benign Keratosis-like Lesions</span>
+          </div>
+          <div class="disease-row" data-code="df">
+            <span class="dpill">df</span>
+            <span style="font-size:13px; color:#b0bec8; margin-left:10px;">Dermatofibroma</span>
+          </div>
+          <div class="disease-row" data-code="nv">
+            <span class="dpill">nv</span>
+            <span style="font-size:13px; color:#b0bec8; margin-left:10px;">Melanocytic Nevi (moles)</span>
+          </div>
+          <div class="disease-row" data-code="mel">
+            <span class="dpill">mel</span>
+            <span style="font-size:13px; color:#b0bec8; margin-left:10px;">Melanoma</span>
+          </div>
+          <div class="disease-row" data-code="vasc">
+            <span class="dpill">vasc</span>
+            <span style="font-size:13px; color:#b0bec8; margin-left:10px;">Vascular Lesions</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="stage-camera" class="hidden">
+      <div class="camera-wrap">
+        <video id="camVideo" class="camera-video" autoplay playsinline muted></video>
+        <canvas id="camCanvas"></canvas>
+        <div class="camera-bar">
+          <button class="btn btn-secondary" onclick="stopCamera(); show('upload')">← Back</button>
+          <button class="btn btn-primary" onclick="capturePhoto()">📸 Capture</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stage-preview" class="hidden">
+      <div class="preview-card">
+        <img id="prevImg" src="" alt="Preview" class="preview-image" />
+        <div class="preview-actions">
+          <p>Ready for classification</p>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="reset()">✕ Remove</button>
+            <button class="btn btn-primary" onclick="analyzeImage()">🔍 Classify</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="stage-analyzing" class="hidden">
+      <div class="analyzing">
+        <div class="scan-ring"></div>
+        <h3>Classifying lesion…</h3>
+        <p>Gemini AI is analyzing the dermoscopy image</p>
+      </div>
+    </div>
+
+    <div id="stage-result" class="hidden">
+      <div class="result-card">
+        <div class="result-top">
+          <div class="condition-icon">🩺</div>
+          <div>
+            <div class="condition-code" id="rCode"></div>
+            <div class="condition-name" id="rCondition"></div>
+            <div class="badge-row">
+              <span class="conf-badge" id="rConfBadge"></span>
+              <span class="risk-badge" id="rRiskBadge"></span>
+            </div>
+          </div>
+        </div>
+        <div class="result-body">
+          <p class="desc" id="rDesc"></p>
+          <div class="info-grid">
+            <div class="info-block">
+              <div class="info-label">Key symptoms</div>
+              <div id="rSymptoms"></div>
+            </div>
+            <div class="info-block">
+              <div class="info-label">Commonly affects</div>
+              <div class="info-value" id="rCommonIn"></div>
+            </div>
+          </div>
+          <div class="action-block">
+            <span class="action-icon">💡</span>
+            <p class="action-text" id="rAction"></p>
+          </div>
+          <div class="disclaimer">
+            <span style="font-size:16px;margin-top:1px;">⚠️</span>
+            <p><strong style="color:#f59e0b;">Educational use only.</strong> This is a BE engineering project demo using the dataset. Not a substitute for professional medical diagnosis. Always consult a qualified dermatologist.</p>
+          </div>
+        </div>
+        <div class="result-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" onclick="downloadJSON()" style="border-color: rgba(0,212,255,0.2); color: var(--accent);">
+              📥 Download JSON
+            </button>
+            <button class="btn btn-secondary" onclick="downloadPDF()" style="border-color: rgba(123,97,255,0.3); color: #a395ff;">
+              📄 Download PDF
+            </button>
+          </div>
+          <button class="btn btn-secondary" onclick="reset()">← Classify another</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stage-error" class="hidden">
+      <div class="error-box">
+        <p id="errMsg">⚠ Something went wrong.</p>
+        <button class="btn btn-secondary" onclick="reset()">← Try again</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── CONFIG ────────────────────────────────────────────────
+  const BACKEND_URL = "http://localhost:5000";
+
+  // ── STATE ─────────────────────────────────────────────────
+  let imgDataURL  = null;
+  let camStream   = null;
+  let currentReportData = null; 
+  const STAGES    = ["upload","camera","preview","analyzing","result","error"];
+
+  // ── STAGE MANAGER ─────────────────────────────────────────
+  function show(name) {
+    STAGES.forEach(s => document.getElementById("stage-"+s).classList.toggle("hidden", s !== name));
+  }
+
+  // ── FILE HANDLING ─────────────────────────────────────────
+  const dropZone = document.getElementById("dropZone");
+  dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+  dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault(); dropZone.classList.remove("drag-over");
+    const f = e.dataTransfer.files[0]; if (f) loadFile(f);
+  });
+  dropZone.addEventListener("click", () => document.getElementById("fileInput").click());
+
+  function handleFile(e) { const f = e.target.files?.[0]; if (f) loadFile(f); e.target.value = ""; }
+
+  function loadFile(file) {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      imgDataURL = ev.target.result;
+      document.getElementById("prevImg").src = imgDataURL;
+      show("preview");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── CAMERA ────────────────────────────────────────────────
+  async function startCamera() {
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      show("camera");
+      setTimeout(() => { const v = document.getElementById("camVideo"); if (v) v.srcObject = camStream; }, 100);
+    } catch {
+      showError("Camera access denied. Please upload an image instead.");
+    }
+  }
+
+  function stopCamera() {
+    if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  }
+
+  function capturePhoto() {
+    const v = document.getElementById("camVideo");
+    const c = document.getElementById("camCanvas");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    const ctx = c.getContext("2d");
+    ctx.scale(-1,1); ctx.drawImage(v, -c.width, 0);
+    imgDataURL = c.toDataURL("image/jpeg", 0.85);
+    document.getElementById("prevImg").src = imgDataURL;
+    stopCamera(); show("preview");
+  }
+
+  // ── ANALYZE ───────────────────────────────────────────────
+  async function analyzeImage() {
+    if (!imgDataURL) return;
+    show("analyzing");
+    try {
+      const blob = await (await fetch(imgDataURL)).blob();
+      const form = new FormData();
+      form.append("image", blob, "lesion.jpg");
+
+      const res  = await fetch(`${BACKEND_URL}/analyze`, { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Backend error");
+
+      currentReportData = data; 
+      renderResult(data);
+      show("result");
+    } catch (err) {
+      showError(err.message || "Analysis failed. Is the backend running?");
+    }
+  }
+
+  function renderResult(r) {
+    document.getElementById("rCode").textContent      = r.code ? r.code.toUpperCase() : "";
+    document.getElementById("rCondition").textContent = r.condition || "Unknown";
+    document.getElementById("rDesc").textContent      = r.description || "";
+    document.getElementById("rCommonIn").textContent  = r.commonIn || "";
+    document.getElementById("rAction").textContent    = r.action || "";
+
+    const scoreVal = r.confidence_score !== undefined ? parseFloat(r.confidence_score) : 0.0;
+    const percentageString = `${Math.round(scoreVal * 100)}%`;
+    const labelString = r.confidence_label || "Low";
+
+    const cb = document.getElementById("rConfBadge");
+    cb.textContent = `${labelString} Confidence (${percentageString})`;
+    
+    const confLower = labelString.toLowerCase();
+    cb.className = "conf-badge " + (confLower === "high" ? "conf-high" : confLower === "medium" ? "conf-medium" : "conf-low");
+
+    // Risk badge
+    const risk = (r.riskLevel || "low").toLowerCase();
+    const rb   = document.getElementById("rRiskBadge");
+    rb.textContent = (r.riskLevel || "Low") + " risk";
+    rb.className   = "risk-badge risk-" + (["low","moderate","high","critical"].includes(risk) ? risk : "low");
+
+    // Symptoms
+    const el = document.getElementById("rSymptoms");
+    el.innerHTML = (r.symptoms || []).map(s =>
+      `<div class="symptom-item"><div class="sdot"></div><span>${s}</span></div>`
+    ).join("");
+  }
+
+  // ── DOWNLOAD ROUTINES ──────────────────────────────────────
+  function downloadJSON() {
+    if (!currentReportData) return alert("No report data available to download.");
+    
+    const jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentReportData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    
+    downloadAnchor.setAttribute("href", jsonString);
+    downloadAnchor.setAttribute("download", `Skin_Report_${currentReportData.code || 'lesion'}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  }
+
+  // ✅ New clean text-based generation using native PDF primitives instead of screenshots
+  function downloadPDF() {
+    if (!currentReportData) return alert("No active data found.");
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Header Style Config
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("MEDICAL ANALYSIS REPORT", 20, 25);
+    
+    doc.setFontSize(10);
+    doc.setFont("Helvetica", "normal");
+    doc.text("BE Engineering Project Demo", 20, 32);
+    
+    // Draw horizontal separator line
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, 37, 190, 37);
+    
+    // Core details
+    doc.setFontSize(12);
+    doc.setFont("Helvetica", "bold");
+    doc.text("Condition Name:", 20, 48);
+    doc.setFont("Helvetica", "normal");
+    doc.text(`${currentReportData.condition || 'N/A'} (${(currentReportData.code || '').toUpperCase()})`, 60, 48);
+    
+    doc.setFont("Helvetica", "bold");
+    doc.text("Confidence:", 20, 56);
+    doc.setFont("Helvetica", "normal");
+    const scoreVal = currentReportData.confidence_score !== undefined ? parseFloat(currentReportData.confidence_score) : 0;
+    doc.text(`${currentReportData.confidence_label || 'Low'} (${Math.round(scoreVal * 100)}%)`, 60, 56);
+    
+    doc.setFont("Helvetica", "bold");
+    doc.text("Risk Classification:", 20, 64);
+    doc.setFont("Helvetica", "normal");
+    doc.text(`${currentReportData.riskLevel || 'Low'} Risk`, 60, 64);
+
+    doc.setFont("Helvetica", "bold");
+    doc.text("Commonly Affects:", 20, 72);
+    doc.setFont("Helvetica", "normal");
+    doc.text(`${currentReportData.commonIn || 'N/A'}`, 60, 72);
+    
+    // Description Paragraph text wrapping blocks
+    doc.setFont("Helvetica", "bold");
+    doc.text("Clinical Description:", 20, 84);
+    doc.setFont("Helvetica", "normal");
+    const splitDesc = doc.splitTextToSize(currentReportData.description || 'No description provided.', 170);
+    doc.text(splitDesc, 20, 92);
+    
+    // Key Symptoms list block
+    let currentY = 96 + (splitDesc.length * 5);
+    doc.setFont("Helvetica", "bold");
+    doc.text("Key Symptoms Identified:", 20, currentY);
+    doc.setFont("Helvetica", "normal");
+    
+    const symptoms = currentReportData.symptoms || [];
+    symptoms.forEach((symptom, idx) => {
+      currentY += 6;
+      doc.text(`• ${symptom}`, 25, currentY);
+    });
+    
+    // Next Actions
+    currentY += 12;
+    doc.setFont("Helvetica", "bold");
+    doc.text("Recommended Action:", 20, currentY);
+    doc.setFont("Helvetica", "normal");
+    currentY += 6;
+    const splitAction = doc.splitTextToSize(currentReportData.action || 'Consult a medical specialist.', 170);
+    doc.text(splitAction, 20, currentY);
+    
+    // Project Disclaimer Footer
+    currentY += 20;
+    doc.setDrawColor(245, 158, 11); // Yellow accent warning frame lines
+    doc.line(20, currentY, 190, currentY);
+    currentY += 8;
+    doc.setFont("Helvetica", "bold");
+    doc.text("⚠️ EDUCATIONAL USE ONLY DISCLAIMER:", 20, currentY);
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(10);
+    currentY += 5;
+    const disclaimer = "This document represents automated insights provided by a machine learning model demo for an engineering project framework evaluation. It does not provide medical diagnostic opinions. Always pursue independent diagnostic work with an official clinical dermatologist.";
+    const splitDisclaimer = doc.splitTextToSize(disclaimer, 170);
+    doc.text(splitDisclaimer, 20, currentY);
+    
+    // Trigger Save
+    doc.save(`Clinical_Report_${currentReportData.code || 'Analysis'}.pdf`);
+  }
+
+  function showError(msg) {
+    document.getElementById("errMsg").textContent = "⚠ " + msg;
+    show("error");
+  }
+
+  // ── RESET ─────────────────────────────────────────────────
+  function reset() {
+    stopCamera();
+    imgDataURL = null;
+    currentReportData = null;
+    document.getElementById("prevImg").src = "";
+    show("upload");
+  }
+
+  show("upload");
+</script>
+</body>
+</html>
